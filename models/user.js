@@ -34,19 +34,18 @@ const userSchema = new mongoose.Schema(
 
     country: {
       type: String,
-      required: true,
+      default: "Unknown",
       trim: true,
     },
 
     countryCode: {
       type: String,
-      required: true,
-      // Examples: +91, +1, +44
+      default: "unknown",
     },
 
     phoneNumber: {
       type: String,
-      required: true,
+      default: "0000000000",
       trim: true,
     },
 
@@ -71,6 +70,11 @@ const userSchema = new mongoose.Schema(
         ref: "Subject",
       },
     ],
+
+    mustChangePassword: {
+      type: Boolean,
+      default: false,
+    },
 
     refreshTokens: [
   {

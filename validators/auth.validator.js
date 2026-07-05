@@ -34,4 +34,12 @@ const logoutSchema = z.object({
   refreshToken: z.string().min(1, "Refresh token is required"),
 });
 
-module.exports = { registerSchema, loginSchema, refreshTokenSchema, logoutSchema };
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: z
+    .string()
+    .min(8, "New password must be at least 8 characters")
+    .max(128, "New password is too long"),
+});
+
+module.exports = { registerSchema, loginSchema, refreshTokenSchema, logoutSchema, changePasswordSchema };

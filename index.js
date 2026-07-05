@@ -30,11 +30,12 @@ const teacherStudentRouter = require("./routes/teacherStudent.routes");
 const scheduleRouter = require("./routes/schedule.routes");
 const classSessionRouter = require("./routes/classSession.routes");
 const analyticsRouter = require("./routes/analytics.routes");
+const adminRouter = require("./routes/admin.routes");
 
 app.use("/auth", authRouter);
 app.use("/subjects", subjectRouter);
 app.use("/teacher", teacherStudentRouter);
-app.use("/admin", teacherStudentRouter);
+app.use("/admin", adminRouter);
 app.use("/schedules", scheduleRouter);
 app.use("/sessions", classSessionRouter);
 app.use("/analytics", analyticsRouter);

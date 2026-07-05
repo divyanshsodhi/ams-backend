@@ -14,9 +14,9 @@ const createStudent = async (teacherId, data) => {
       fullName: data.fullName,
       email: data.email.toLowerCase(),
       password: hashedPassword,
-      country: data.country,
-      countryCode: data.countryCode,
-      phoneNumber: data.phoneNumber,
+      country: data.country || undefined,
+      countryCode: data.countryCode || undefined,
+      phoneNumber: data.phoneNumber || undefined,
       role: "student",
     });
   }

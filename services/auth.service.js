@@ -89,7 +89,7 @@ const loginUser = async (identifier, password, device = "unknown") => {
 
   const userData = await User.findById(user._id).select("-password -refreshTokens");
 
-  return { user: userData, accessToken, refreshToken };
+  return { user: userData, accessToken, refreshToken, mustChangePassword: user.mustChangePassword };
 };
 
 const refreshUserToken = async (token) => {
@@ -130,6 +130,26 @@ const logoutUser = async (userId, token) => {
   await user.save();
 };
 
+const changePassword = async (userId, currentPassword, newPassword) => {
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new NotFoundError("User not found");
+  }
+
+  const isPasswordValid = await bcrypt.compare(currentPassword, user.password);
+  if (!isPasswordValid) {
+    throw new AuthenticationError("Current password is incorrect");
+  }
+
+  const hashedPassword = await bcrypt.hash(newPassword, 10);
+  user.password = hashedPassword;
+  user.mustChangePassword = false;
+  await user.save();
+
+  const userData = await User.findById(user._id).select("-password -refreshTokens");
+  return userData;
+};
+
 const getMe = async (userId) => {
   const user = await User.findById(userId).select("-password -refreshTokens");
   if (!user) {
@@ -147,5 +167,6 @@ module.exports = {
   loginUser,
   refreshUserToken,
   logoutUser,
+  changePassword,
   getMe,
 };

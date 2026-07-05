@@ -23,9 +23,14 @@ const logoutUser = asyncHandler(async (req, res) => {
   res.status(200).json(ApiResponse.success("Logged out successfully"));
 });
 
+const changePassword = asyncHandler(async (req, res) => {
+  const user = await authService.changePassword(req.user.userId, req.body.currentPassword, req.body.newPassword);
+  res.status(200).json(ApiResponse.success("Password changed successfully", user));
+});
+
 const getMe = asyncHandler(async (req, res) => {
   const user = await authService.getMe(req.user.userId);
   res.status(200).json(ApiResponse.success("User fetched successfully", user));
 });
 
-module.exports = { registerUser, loginUser, refreshToken, logoutUser, getMe };
+module.exports = { registerUser, loginUser, refreshToken, logoutUser, changePassword, getMe };
