@@ -8,16 +8,14 @@ const userSchema = new mongoose.Schema(
       unique: true,
       trim: true,
       lowercase: true,
-      minlength: 3,
+      minlength: 3, 
       maxlength: 30,
     },
 
     password:{
       type: String,
       required: true,
-      trim: true,
       minLength: 8,
-      maxlength: 20
     },    
 
     fullName: {

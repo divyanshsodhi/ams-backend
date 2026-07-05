@@ -8,13 +8,19 @@ const subjectSchema = new mongoose.Schema(
       unique: true,
       trim: true,
     },
-
     code: {
       type: String,
       trim: true,
       uppercase: true,
     },
-    
+    description: {
+      type: String,
+      trim: true,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
   },
   {
     timestamps: true,

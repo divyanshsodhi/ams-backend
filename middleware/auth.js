@@ -1,4 +1,4 @@
-const { verifyAccessToken } = require("../services/authService");
+const { verifyAccessToken } = require(  "../services/auth.service");
 
 const authenticate = (req, res, next) => {
   const authHeader = req.headers.authorization;
