@@ -7,7 +7,6 @@ const { deriveUsernameFromEmail } = require("../core/utils/username");
 const config = require("../config");
 const { ROLES } = require("../constants/roles");
 const { USER_DEFAULTS } = require("../constants/userDefaults");
-const { STATUS } = require("../constants/status");
 
 const getTeachers = async (query) => {
   const { page, limit, skip } = getPaginationParams(query);
@@ -22,14 +21,9 @@ const getTeachers = async (query) => {
     ];
   }
 
-  if (query.status === STATUS.ACTIVE || query.status === STATUS.INACTIVE) {
-    filter.isActive = query.status === STATUS.ACTIVE;
-  }
-
   const [teachers, total] = await Promise.all([
     User.find(filter)
       .select(USER_SAFE_PROJECTION)
-      .populate("subjects")
       .skip(skip)
       .limit(limit)
       .sort({ createdAt: -1 }),
@@ -40,9 +34,9 @@ const getTeachers = async (query) => {
 };
 
 const getTeacher = async (id) => {
-  const teacher = await User.findOne({ _id: id, role: ROLES.TEACHER })
-    .select(USER_SAFE_PROJECTION)
-    .populate("subjects");
+  const teacher = await User.findOne({ _id: id, role: ROLES.TEACHER }).select(
+    USER_SAFE_PROJECTION
+  );
 
   if (!teacher) {
     throw new NotFoundError("Teacher not found");
@@ -72,13 +66,10 @@ const createTeacher = async (data) => {
     countryCode: data.countryCode || USER_DEFAULTS.COUNTRY_CODE,
     phoneNumber: data.phoneNumber || USER_DEFAULTS.PHONE_NUMBER,
     role: ROLES.TEACHER,
-    subjects: data.subjects || [],
     mustChangePassword: true,
   });
 
-  return User.findById(teacher._id)
-    .select(USER_SAFE_PROJECTION)
-    .populate("subjects");
+  return User.findById(teacher._id).select(USER_SAFE_PROJECTION);
 };
 
 const updateTeacher = async (id, data) => {
@@ -86,7 +77,7 @@ const updateTeacher = async (id, data) => {
     { _id: id, role: ROLES.TEACHER },
     data,
     { new: true, runValidators: true }
-  ).select(USER_SAFE_PROJECTION).populate("subjects");
+  ).select(USER_SAFE_PROJECTION);
 
   if (!teacher) {
     throw new NotFoundError("Teacher not found");

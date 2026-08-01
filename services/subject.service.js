@@ -16,10 +16,6 @@ const getSubjects = async (query) => {
   const { page, limit, skip } = getPaginationParams(query);
   const filter = {};
 
-  if (query.isActive !== undefined) {
-    filter.isActive = query.isActive === "true";
-  }
-
   if (query.search) {
     filter.$or = [
       { name: { $regex: query.search, $options: "i" } },

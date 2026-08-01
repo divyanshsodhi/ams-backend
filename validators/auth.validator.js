@@ -19,7 +19,6 @@ const registerSchema = z.object({
   phoneNumber: z.string().min(1, "Phone number is required").trim(),
   age: z.coerce.number().int().min(3).max(100).optional(),
   role: z.enum(ALL_ROLES, { message: "Invalid role selected" }),
-  subjects: z.array(z.string()).optional(),
 });
 
 const loginSchema = z.object({

@@ -1,5 +1,4 @@
 const JOB_SCHEDULES = Object.freeze({
-  MONTHLY_RESET: "0 0 1 * *",
   REMINDER: "*/30 * * * *",
 });
 

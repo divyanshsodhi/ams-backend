@@ -1,40 +1,36 @@
 const mongoose = require("mongoose");
-const { ALL_RECURRENCE_TYPES, ALL_DAYS_OF_WEEK } = require("../constants/recurrenceTypes");
-const { MEETING_MODES, ALL_MEETING_MODES } = require("../constants/meetingModes");
+const { REPEAT_TYPES, ALL_REPEAT_TYPES, ALL_DAYS_OF_WEEK } = require("../constants/repeatTypes");
+const { DEFAULT_TIMEZONE } = require("../constants/timezone");
 
+// A schedule is a recurring template bound to an enrollment. Teacher, student
+// and subject are intentionally not duplicated here; they are always resolved
+// through the enrollment reference so a schedule can never contradict its
+// enrollment.
 const scheduleSchema = new mongoose.Schema(
   {
-    teacherStudentId: {
+    enrollmentId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "TeacherStudent",
+      ref: "Enrollment",
       required: true,
     },
-    teacherId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    studentId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    subjectId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Subject",
-      required: true,
-    },
-    recurrenceType: {
+    repeatType: {
       type: String,
-      enum: ALL_RECURRENCE_TYPES,
+      enum: ALL_REPEAT_TYPES,
       required: true,
     },
-    daysOfWeek: [
-      {
-        type: String,
-        enum: ALL_DAYS_OF_WEEK,
+    daysOfWeek: {
+      type: [
+        {
+          type: String,
+          enum: ALL_DAYS_OF_WEEK,
+        },
+      ],
+      required: true,
+      validate: {
+        validator: (days) => days.length > 0,
+        message: "At least one day must be selected",
       },
-    ],
+    },
     startTime: {
       type: String,
       required: true,
@@ -43,17 +39,6 @@ const scheduleSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
-    meetingMode: {
-      type: String,
-      enum: ALL_MEETING_MODES,
-      default: MEETING_MODES.ONLINE,
-    },
-    meetingLink: {
-      type: String,
-    },
-    location: {
-      type: String,
-    },
     startDate: {
       type: Date,
       required: true,
@@ -61,14 +46,27 @@ const scheduleSchema = new mongoose.Schema(
     endDate: {
       type: Date,
     },
+    timezone: {
+      type: String,
+      required: true,
+      default: DEFAULT_TIMEZONE,
+    },
     isActive: {
       type: Boolean,
       default: true,
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
     },
   },
   {
     timestamps: true,
   }
 );
+
+scheduleSchema.index({ enrollmentId: 1, isActive: 1 });
+scheduleSchema.index({ enrollmentId: 1, startDate: 1 });
 
 module.exports = mongoose.model("Schedule", scheduleSchema);

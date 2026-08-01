@@ -1,85 +1,110 @@
 const Schedule = require("../models/schedule");
-const TeacherStudent = require("../models/teacherStudent");
+const Enrollment = require("../models/enrollment");
 const { NotFoundError, ValidationError } = require("../core/errors");
 const { getPaginationParams, getPaginationMeta } = require("../core/utils/pagination");
 const { assertOwnership } = require("../core/utils/ownership");
 const { USER_SAFE_PROJECTION } = require("../core/utils/projections");
 const { ROLES } = require("../constants/roles");
-const { RECURRENCE_TYPES } = require("../constants/recurrenceTypes");
+const { REPEAT_TYPES } = require("../constants/repeatTypes");
 const { PAGINATION } = require("../constants/pagination");
+const { getEnrollmentIdsForUser } = require("./enrollment.service");
 
 const MONTHLY_SESSION_LIMIT_MARGIN = 2;
 
-const RECURRENCE_MONTHLY_ESTIMATES = Object.freeze({
-  [RECURRENCE_TYPES.DAILY]: 30,
-  [RECURRENCE_TYPES.WEEKLY]: (dayCount) => dayCount * 4,
-  [RECURRENCE_TYPES.BIWEEKLY]: (dayCount) => dayCount * 2,
-  [RECURRENCE_TYPES.MONTHLY]: (dayCount) => dayCount,
+const REPEAT_MONTHLY_ESTIMATES = Object.freeze({
+  [REPEAT_TYPES.DAILY]: 30,
+  [REPEAT_TYPES.WEEKLY]: (dayCount) => dayCount * 4,
+  [REPEAT_TYPES.BIWEEKLY]: (dayCount) => dayCount * 2,
+  [REPEAT_TYPES.MONTHLY]: (dayCount) => dayCount,
 });
 
-const estimateMonthlySessions = (data) => {
-  if (!data.daysOfWeek || data.daysOfWeek.length === 0) return 0;
+const SCHEDULE_POPULATION = [
+  {
+    path: "enrollmentId",
+    populate: [
+      { path: "teacherId", select: USER_SAFE_PROJECTION },
+      { path: "studentId", select: USER_SAFE_PROJECTION },
+      "subjectId",
+    ],
+  },
+];
 
-  const estimator = RECURRENCE_MONTHLY_ESTIMATES[data.recurrenceType];
+const estimateMonthlySessions = (data) => {
+  if (!data.daysOfWeek || data.daysOfWeek.length === 0) {
+    return 0;
+  }
+
+  const estimator = REPEAT_MONTHLY_ESTIMATES[data.repeatType];
   return typeof estimator === "function"
     ? estimator(data.daysOfWeek.length)
     : estimator ?? data.daysOfWeek.length * 4;
 };
 
-const assertWithinMonthlyLimit = (scheduleData, relationship) => {
+const assertWithinMonthlyLimit = (scheduleData, enrollment) => {
   const estimated = estimateMonthlySessions(scheduleData);
-  const maxAllowed = relationship.monthlyClasses + MONTHLY_SESSION_LIMIT_MARGIN;
+  const maxAllowed =
+    enrollment.monthlyClasses + enrollment.extraMonthlyClasses + MONTHLY_SESSION_LIMIT_MARGIN;
 
   if (estimated > maxAllowed) {
     throw new ValidationError(
-      `Schedule would generate ${estimated} sessions per month, exceeding the limit of ${maxAllowed}`
+      `Schedule would generate ${estimated} sessions per month, exceeding the quota of ${maxAllowed}`
     );
   }
 };
 
-const assertTeacherOwnsRelationship = (user, relationship) => {
+const assertTeacherOwnsEnrollment = (user, enrollment) => {
   if (user.role === ROLES.TEACHER) {
     assertOwnership(
-      relationship.teacherId,
+      enrollment.teacherId,
       user.userId,
-      "Not authorized to create schedule for this student"
+      "Not authorized to manage schedules for this enrollment"
+    );
+  }
+};
+
+const assertEnrollmentAccess = (user, enrollment) => {
+  if (user.role === ROLES.TEACHER) {
+    assertOwnership(
+      enrollment.teacherId,
+      user.userId,
+      "Not authorized to manage this schedule"
+    );
+  }
+
+  if (user.role === ROLES.STUDENT) {
+    assertOwnership(
+      enrollment.studentId,
+      user.userId,
+      "Not authorized to view this schedule"
     );
   }
 };
 
 const createSchedule = async (user, data) => {
-  const relationship = await TeacherStudent.findById(data.teacherStudentId);
-  if (!relationship) {
-    throw new NotFoundError("Student relationship not found");
+  const enrollment = await Enrollment.findById(data.enrollmentId);
+  if (!enrollment) {
+    throw new NotFoundError("Enrollment not found");
   }
 
-  assertTeacherOwnsRelationship(user, relationship);
-  assertWithinMonthlyLimit(data, relationship);
+  assertTeacherOwnsEnrollment(user, enrollment);
+  assertWithinMonthlyLimit(data, enrollment);
 
-  const schedule = await Schedule.create({
-    ...data,
-    teacherId: relationship.teacherId,
-    studentId: relationship.studentId,
-  });
-
-  return schedule.populate(["teacherStudentId", "teacherId", "studentId", "subjectId"]);
+  const schedule = await Schedule.create({ ...data, createdBy: user.userId });
+  return schedule.populate(SCHEDULE_POPULATION);
 };
 
 const getSchedules = async (user, query) => {
   const { page, limit, skip } = getPaginationParams(query);
   const filter = {};
 
-  if (user.role === ROLES.TEACHER) filter.teacherId = user.userId;
-  if (user.role === ROLES.STUDENT) filter.studentId = user.userId;
-  if (query.teacherStudentId) filter.teacherStudentId = query.teacherStudentId;
+  const enrollmentIds = await getEnrollmentIdsForUser(user);
+  if (enrollmentIds) filter.enrollmentId = { $in: enrollmentIds };
+  if (query.enrollmentId) filter.enrollmentId = query.enrollmentId;
   if (query.isActive !== undefined) filter.isActive = query.isActive === "true";
 
   const [schedules, total] = await Promise.all([
     Schedule.find(filter)
-      .populate("teacherStudentId")
-      .populate("teacherId", USER_SAFE_PROJECTION)
-      .populate("studentId", USER_SAFE_PROJECTION)
-      .populate("subjectId")
+      .populate(SCHEDULE_POPULATION)
       .skip(skip)
       .limit(limit)
       .sort({ createdAt: -1 }),
@@ -90,24 +115,18 @@ const getSchedules = async (user, query) => {
 };
 
 const getScheduleById = async (user, id) => {
-  const schedule = await Schedule.findById(id)
-    .populate("teacherStudentId")
-    .populate("teacherId", USER_SAFE_PROJECTION)
-    .populate("studentId", USER_SAFE_PROJECTION)
-    .populate("subjectId");
+  const schedule = await Schedule.findById(id).populate(SCHEDULE_POPULATION);
 
   if (!schedule) {
     throw new NotFoundError("Schedule not found");
   }
 
-  if (user.role === ROLES.TEACHER) {
-    assertOwnership(schedule.teacherId._id, user.userId, "Not authorized to view this schedule");
+  const enrollment = schedule.enrollmentId;
+  if (!enrollment) {
+    throw new NotFoundError("Linked enrollment not found");
   }
 
-  if (user.role === ROLES.STUDENT) {
-    assertOwnership(schedule.studentId._id, user.userId, "Not authorized to view this schedule");
-  }
-
+  assertEnrollmentAccess(user, enrollment);
   return schedule;
 };
 
@@ -117,19 +136,32 @@ const updateSchedule = async (user, id, data) => {
     throw new NotFoundError("Schedule not found");
   }
 
-  if (user.role === ROLES.TEACHER) {
-    assertOwnership(schedule.teacherId, user.userId, "Not authorized to update this schedule");
+  const currentEnrollment = await Enrollment.findById(schedule.enrollmentId);
+  if (!currentEnrollment) {
+    throw new NotFoundError("Linked enrollment not found");
   }
 
-  if (data.daysOfWeek || data.recurrenceType) {
-    const relationship = await TeacherStudent.findById(schedule.teacherStudentId);
-    if (relationship) {
-      assertWithinMonthlyLimit({ ...schedule.toObject(), ...data }, relationship);
+  const merged = { ...schedule.toObject(), ...data };
+  let effectiveEnrollment = currentEnrollment;
+
+  if (data.enrollmentId && String(data.enrollmentId) !== String(schedule.enrollmentId)) {
+    effectiveEnrollment = await Enrollment.findById(data.enrollmentId);
+    if (!effectiveEnrollment) {
+      throw new NotFoundError("Enrollment not found");
     }
+    assertTeacherOwnsEnrollment(user, effectiveEnrollment);
+  } else {
+    assertTeacherOwnsEnrollment(user, currentEnrollment);
   }
 
-  const updated = await Schedule.findByIdAndUpdate(id, data, { new: true, runValidators: true })
-    .populate(["teacherStudentId", "teacherId", "studentId", "subjectId"]);
+  if (merged.daysOfWeek || merged.repeatType) {
+    assertWithinMonthlyLimit(merged, effectiveEnrollment);
+  }
+
+  const updated = await Schedule.findByIdAndUpdate(id, data, {
+    new: true,
+    runValidators: true,
+  }).populate(SCHEDULE_POPULATION);
 
   return updated;
 };
@@ -140,28 +172,34 @@ const deleteSchedule = async (user, id) => {
     throw new NotFoundError("Schedule not found");
   }
 
-  if (user.role === ROLES.TEACHER) {
-    assertOwnership(schedule.teacherId, user.userId, "Not authorized to delete this schedule");
+  const enrollment = await Enrollment.findById(schedule.enrollmentId);
+  if (!enrollment) {
+    throw new NotFoundError("Linked enrollment not found");
   }
 
+  assertTeacherOwnsEnrollment(user, enrollment);
   await Schedule.findByIdAndDelete(id);
 };
 
 const getUpcomingSchedules = async (user, query) => {
   const filter = { isActive: true };
 
-  if (user.role === ROLES.TEACHER) filter.teacherId = user.userId;
-  if (user.role === ROLES.STUDENT) filter.studentId = user.userId;
+  const enrollmentIds = await getEnrollmentIdsForUser(user);
+  if (enrollmentIds) filter.enrollmentId = { $in: enrollmentIds };
 
   const schedules = await Schedule.find(filter)
-    .populate("teacherStudentId")
-    .populate("teacherId", USER_SAFE_PROJECTION)
-    .populate("studentId", USER_SAFE_PROJECTION)
-    .populate("subjectId")
+    .populate(SCHEDULE_POPULATION)
     .sort({ startDate: 1 })
     .limit(parseInt(query.limit, 10) || PAGINATION.DEFAULT_LIMIT);
 
   return schedules;
 };
 
-module.exports = { createSchedule, getSchedules, getScheduleById, updateSchedule, deleteSchedule, getUpcomingSchedules };
+module.exports = {
+  createSchedule,
+  getSchedules,
+  getScheduleById,
+  updateSchedule,
+  deleteSchedule,
+  getUpcomingSchedules,
+};

@@ -15,27 +15,37 @@ const startReminderJob = () => {
       const reminderWindow = new Date(now.getTime() + REMINDER_WINDOW_MINUTES * 60 * 1000);
 
       const upcomingSessions = await ClassSession.find({
-        classDate: {
+        date: {
           $gte: now,
           $lte: reminderWindow,
         },
         status: SESSION_STATUS.SCHEDULED,
-      }).populate("teacherId", "fullName")
-        .populate("studentId", "fullName");
+      }).populate({
+        path: "enrollmentId",
+        populate: [
+          { path: "teacherId", select: "fullName" },
+          { path: "studentId", select: "fullName" },
+        ],
+      });
 
       for (const session of upcomingSessions) {
+        const enrollment = session.enrollmentId;
+        if (!enrollment || !enrollment.teacherId || !enrollment.studentId) {
+          continue;
+        }
+
         const notifications = [
           {
-            recipientId: session.teacherId._id,
+            recipientId: enrollment.teacherId._id,
             title: "Upcoming Class",
-            message: `Your class with ${session.studentId.fullName} starts soon`,
+            message: `Your class with ${enrollment.studentId.fullName} starts soon`,
             type: NOTIFICATION_TYPES.UPCOMING_CLASS,
             metadata: { sessionId: session._id },
           },
           {
-            recipientId: session.studentId._id,
+            recipientId: enrollment.studentId._id,
             title: "Upcoming Class",
-            message: `Your class with ${session.teacherId.fullName} starts soon`,
+            message: `Your class with ${enrollment.teacherId.fullName} starts soon`,
             type: NOTIFICATION_TYPES.UPCOMING_CLASS,
             metadata: { sessionId: session._id },
           },

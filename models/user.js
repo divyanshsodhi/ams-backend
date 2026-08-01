@@ -64,15 +64,6 @@ const userSchema = new mongoose.Schema(
       required: true,
     },
 
-    // For teachers -> subjects taught
-    // For students -> subjects enrolled
-    subjects: [
-      {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Subject",
-      },
-    ],
-
     mustChangePassword: {
       type: Boolean,
       default: false,

@@ -9,7 +9,6 @@ const createTeacherSchema = z.object({
   country: z.string().trim().optional(),
   countryCode: z.string().optional(),
   phoneNumber: z.string().trim().optional(),
-  subjects: z.array(z.string()).optional(),
 });
 
 const updateTeacherSchema = z.object({
@@ -18,8 +17,6 @@ const updateTeacherSchema = z.object({
   country: z.string().trim().optional(),
   countryCode: z.string().optional(),
   phoneNumber: z.string().trim().optional(),
-  subjects: z.array(z.string()).optional(),
-  isActive: z.boolean().optional(),
 });
 
 module.exports = { createTeacherSchema, updateTeacherSchema };

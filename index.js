@@ -33,17 +33,19 @@ app.get(ENDPOINTS.health, (req, res) => {
 
 const authRouter = require("./routes/auth.routes");
 const subjectRouter = require("./routes/subject.routes");
-const teacherStudentRouter = require("./routes/teacherStudent.routes");
+const enrollmentRouter = require("./routes/enrollment.routes");
 const scheduleRouter = require("./routes/schedule.routes");
 const classSessionRouter = require("./routes/classSession.routes");
+const attendanceRouter = require("./routes/attendance.routes");
 const analyticsRouter = require("./routes/analytics.routes");
 const adminRouter = require("./routes/admin.routes");
 
 app.use(ENDPOINTS.auth.base, authRouter);
 app.use(ENDPOINTS.subjects.base, subjectRouter);
-app.use(ENDPOINTS.teacher.base, teacherStudentRouter);
+app.use(ENDPOINTS.teacher.base, enrollmentRouter);
 app.use(ENDPOINTS.admin.base, adminRouter);
 app.use(ENDPOINTS.schedules.base, scheduleRouter);
+app.use(ENDPOINTS.sessions.base, attendanceRouter);
 app.use(ENDPOINTS.sessions.base, classSessionRouter);
 app.use(ENDPOINTS.analytics.base, analyticsRouter);
 
@@ -54,10 +56,8 @@ app.use((req, res) => {
 
 app.use(errorHandler);
 
-const { startMonthlyResetJob } = require("./jobs/monthlyReset.job");
 const { startReminderJob } = require("./jobs/reminder.job");
 
-startMonthlyResetJob();
 startReminderJob();
 
 app.listen(config.PORT, () => {

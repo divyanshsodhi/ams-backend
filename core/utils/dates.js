@@ -20,4 +20,14 @@ const startOfMonth = (date = new Date()) =>
 const endOfMonth = (date = new Date()) =>
   new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
 
-module.exports = { startOfDay, endOfDay, startOfWeek, startOfMonth, endOfMonth };
+// Returns the lowercase weekday name of `date` resolved in the given IANA
+// timezone, e.g. "monday". Falls back to the server timezone when omitted.
+const getWeekdayName = (date, timezone) =>
+  date
+    .toLocaleDateString("en-US", {
+      weekday: "long",
+      ...(timezone ? { timeZone: timezone } : {}),
+    })
+    .toLowerCase();
+
+module.exports = { startOfDay, endOfDay, startOfWeek, startOfMonth, endOfMonth, getWeekdayName };

@@ -1,4 +1,4 @@
-const RECURRENCE_TYPES = Object.freeze({
+const REPEAT_TYPES = Object.freeze({
   DAILY: "daily",
   WEEKLY: "weekly",
   BIWEEKLY: "biweekly",
@@ -15,7 +15,7 @@ const DAYS_OF_WEEK = Object.freeze({
   SUNDAY: "sunday",
 });
 
-const ALL_RECURRENCE_TYPES = Object.values(RECURRENCE_TYPES);
+const ALL_REPEAT_TYPES = Object.values(REPEAT_TYPES);
 const ALL_DAYS_OF_WEEK = Object.values(DAYS_OF_WEEK);
 
-module.exports = { RECURRENCE_TYPES, DAYS_OF_WEEK, ALL_RECURRENCE_TYPES, ALL_DAYS_OF_WEEK };
+module.exports = { REPEAT_TYPES, DAYS_OF_WEEK, ALL_REPEAT_TYPES, ALL_DAYS_OF_WEEK };

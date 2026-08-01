@@ -35,10 +35,6 @@ const registerUser = async (userData) => {
     role: userData.role,
   };
 
-  if (userData.role !== ROLES.ADMIN) {
-    data.subjects = userData.subjects || [];
-  }
-
   const user = await User.create(data);
   return User.findById(user._id).select(USER_SAFE_PROJECTION);
 };
