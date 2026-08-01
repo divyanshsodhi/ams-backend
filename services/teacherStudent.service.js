@@ -1,23 +1,27 @@
 const User = require("../models/user");
 const TeacherStudent = require("../models/teacherStudent");
-const { NotFoundError, ConflictError, ValidationError } = require("../core/errors");
+const { NotFoundError, ConflictError } = require("../core/errors");
 const { getPaginationParams, getPaginationMeta } = require("../core/utils/pagination");
-const bcrypt = require("bcrypt");
+const { hashPassword } = require("../core/utils/hashPassword");
+const { USER_SAFE_PROJECTION } = require("../core/utils/projections");
+const { deriveUsernameFromEmail } = require("../core/utils/username");
+const config = require("../config");
+const { ROLES } = require("../constants/roles");
+const { RELATIONSHIP_STATUS, DEFAULT_MONTHLY_CLASSES } = require("../constants/relationshipStatus");
 
 const createStudent = async (teacherId, data) => {
   let student = await User.findOne({ email: data.email.toLowerCase() });
 
   if (!student) {
-    const hashedPassword = await bcrypt.hash(data.password || "student123", 10);
     student = await User.create({
-      username: data.username || data.email.split("@")[0],
+      username: data.username || deriveUsernameFromEmail(data.email),
       fullName: data.fullName,
       email: data.email.toLowerCase(),
-      password: hashedPassword,
+      password: await hashPassword(data.password || config.DEFAULT_STUDENT_PASSWORD),
       country: data.country || undefined,
       countryCode: data.countryCode || undefined,
       phoneNumber: data.phoneNumber || undefined,
-      role: "student",
+      role: ROLES.STUDENT,
     });
   }
 
@@ -34,8 +38,8 @@ const createStudent = async (teacherId, data) => {
     teacherId,
     studentId: student._id,
     subjects: data.subjects || [],
-    monthlyClasses: data.monthlyClasses || 8,
-    status: "active",
+    monthlyClasses: data.monthlyClasses || DEFAULT_MONTHLY_CLASSES,
+    status: RELATIONSHIP_STATUS.ACTIVE,
   });
 
   return relationship.populate(["studentId", "subjects"]);
@@ -51,7 +55,7 @@ const getStudents = async (teacherId, query) => {
 
   const [relationships, total] = await Promise.all([
     TeacherStudent.find(filter)
-      .populate("studentId", "-password -refreshTokens")
+      .populate("studentId", USER_SAFE_PROJECTION)
       .populate("subjects")
       .skip(skip)
       .limit(limit)
@@ -64,7 +68,7 @@ const getStudents = async (teacherId, query) => {
 
 const getStudent = async (teacherId, id) => {
   const relationship = await TeacherStudent.findOne({ _id: id, teacherId })
-    .populate("studentId", "-password -refreshTokens")
+    .populate("studentId", USER_SAFE_PROJECTION)
     .populate("subjects");
 
   if (!relationship) {
@@ -80,7 +84,7 @@ const updateStudent = async (teacherId, id, data) => {
     data,
     { new: true, runValidators: true }
   )
-    .populate("studentId", "-password -refreshTokens")
+    .populate("studentId", USER_SAFE_PROJECTION)
     .populate("subjects");
 
   if (!relationship) {
@@ -112,8 +116,8 @@ const getRelationships = async (query) => {
 
   const [relationships, total] = await Promise.all([
     TeacherStudent.find(filter)
-      .populate("studentId", "-password -refreshTokens")
-      .populate("teacherId", "-password -refreshTokens")
+      .populate("studentId", USER_SAFE_PROJECTION)
+      .populate("teacherId", USER_SAFE_PROJECTION)
       .populate("subjects")
       .skip(skip)
       .limit(limit)

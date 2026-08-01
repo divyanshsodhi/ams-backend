@@ -1,13 +1,11 @@
-const { verifyAccessToken } = require(  "../services/auth.service");
+const { verifyAccessToken } = require("../core/utils/jwt");
+const { AuthenticationError } = require("../core/errors");
 
 const authenticate = (req, res, next) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({
-      success: false,
-      message: "Access token required.",
-    });
+    return next(new AuthenticationError("Access token required."));
   }
 
   const token = authHeader.split(" ")[1];
@@ -17,10 +15,7 @@ const authenticate = (req, res, next) => {
     req.user = decoded;
     next();
   } catch (error) {
-    return res.status(401).json({
-      success: false,
-      message: "Invalid or expired access token.",
-    });
+    return next(new AuthenticationError("Invalid or expired access token."));
   }
 };
 

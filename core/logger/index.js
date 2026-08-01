@@ -1,3 +1,5 @@
+const config = require("../../config");
+
 const logLevels = {
   error: 0,
   warn: 1,
@@ -5,7 +7,7 @@ const logLevels = {
   debug: 3,
 };
 
-const currentLevel = logLevels[process.env.LOG_LEVEL] ?? logLevels.info;
+const currentLevel = logLevels[config.LOG_LEVEL] ?? logLevels.info;
 
 const timestamp = () => new Date().toISOString();
 

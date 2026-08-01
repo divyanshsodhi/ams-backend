@@ -1,31 +1,15 @@
 const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
 const User = require("../models/user");
+const {
+  generateAccessToken,
+  generateRefreshToken,
+  verifyRefreshToken,
+} = require("../core/utils/jwt");
+const { hashPassword } = require("../core/utils/hashPassword");
+const { USER_SAFE_PROJECTION } = require("../core/utils/projections");
 const { ConflictError, AuthenticationError, NotFoundError } = require("../core/errors");
-
-const generateAccessToken = (user) => {
-  return jwt.sign(
-    { userId: user._id, role: user.role },
-    process.env.JWT_ACCESS_SECRET,
-    { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || "15m" }
-  );
-};
-
-const generateRefreshToken = (user) => {
-  return jwt.sign(
-    { userId: user._id },
-    process.env.JWT_REFRESH_SECRET,
-    { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d" }
-  );
-};
-
-const verifyAccessToken = (token) => {
-  return jwt.verify(token, process.env.JWT_ACCESS_SECRET);
-};
-
-const verifyRefreshToken = (token) => {
-  return jwt.verify(token, process.env.JWT_REFRESH_SECRET);
-};
+const { ROLES } = require("../constants/roles");
+const { USER_DEFAULTS } = require("../constants/userDefaults");
 
 const registerUser = async (userData) => {
   const existingUser = await User.findOne({
@@ -39,14 +23,11 @@ const registerUser = async (userData) => {
     throw new ConflictError("User already exists");
   }
 
-  const saltRounds = 10;
-  const hashedPassword = await bcrypt.hash(userData.password, saltRounds);
-
   const data = {
     username: userData.username,
     fullName: userData.fullName,
     email: userData.email,
-    password: hashedPassword,
+    password: await hashPassword(userData.password),
     country: userData.country,
     countryCode: userData.countryCode,
     phoneNumber: userData.phoneNumber,
@@ -54,21 +35,20 @@ const registerUser = async (userData) => {
     role: userData.role,
   };
 
-  if (userData.role !== "admin") {
+  if (userData.role !== ROLES.ADMIN) {
     data.subjects = userData.subjects || [];
   }
 
   const user = await User.create(data);
-  const createdUser = await User.findById(user._id).select("-password -refreshTokens");
-
-  return createdUser;
+  return User.findById(user._id).select(USER_SAFE_PROJECTION);
 };
 
-const loginUser = async (identifier, password, device = "unknown") => {
+const loginUser = async (identifier, password, device = USER_DEFAULTS.DEVICE) => {
+  const normalizedIdentifier = identifier.toLowerCase();
   const user = await User.findOne({
     $or: [
-      { email: identifier.toLowerCase() },
-      { username: identifier.toLowerCase() },
+      { email: normalizedIdentifier },
+      { username: normalizedIdentifier },
     ],
   });
 
@@ -87,7 +67,7 @@ const loginUser = async (identifier, password, device = "unknown") => {
   user.refreshTokens.push({ token: refreshToken, device });
   await user.save();
 
-  const userData = await User.findById(user._id).select("-password -refreshTokens");
+  const userData = await User.findById(user._id).select(USER_SAFE_PROJECTION);
 
   return { user: userData, accessToken, refreshToken, mustChangePassword: user.mustChangePassword };
 };
@@ -141,17 +121,15 @@ const changePassword = async (userId, currentPassword, newPassword) => {
     throw new AuthenticationError("Current password is incorrect");
   }
 
-  const hashedPassword = await bcrypt.hash(newPassword, 10);
-  user.password = hashedPassword;
+  user.password = await hashPassword(newPassword);
   user.mustChangePassword = false;
   await user.save();
 
-  const userData = await User.findById(user._id).select("-password -refreshTokens");
-  return userData;
+  return User.findById(user._id).select(USER_SAFE_PROJECTION);
 };
 
 const getMe = async (userId) => {
-  const user = await User.findById(userId).select("-password -refreshTokens");
+  const user = await User.findById(userId).select(USER_SAFE_PROJECTION);
   if (!user) {
     throw new NotFoundError("User not found");
   }
@@ -159,10 +137,6 @@ const getMe = async (userId) => {
 };
 
 module.exports = {
-  generateAccessToken,
-  generateRefreshToken,
-  verifyAccessToken,
-  verifyRefreshToken,
   registerUser,
   loginUser,
   refreshUserToken,

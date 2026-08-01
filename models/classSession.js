@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
-const { ALL_SESSION_TYPES } = require("../constants/sessionTypes");
-const { ALL_SESSION_STATUS } = require("../constants/sessionStatus");
+const { SESSION_TYPES, ALL_SESSION_TYPES } = require("../constants/sessionTypes");
+const { SESSION_STATUS, ALL_SESSION_STATUS } = require("../constants/sessionStatus");
 
 const classSessionSchema = new mongoose.Schema(
   {
@@ -37,7 +37,7 @@ const classSessionSchema = new mongoose.Schema(
     sessionType: {
       type: String,
       enum: ALL_SESSION_TYPES,
-      default: "regular",
+      default: SESSION_TYPES.REGULAR,
     },
     teacherConfirmed: {
       type: Boolean,
@@ -50,7 +50,7 @@ const classSessionSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: ALL_SESSION_STATUS,
-      default: "scheduled",
+      default: SESSION_STATUS.SCHEDULED,
     },
     reason: {
       type: String,

@@ -1,4 +1,7 @@
 const mongoose = require("mongoose");
+const { ROLES, ALL_ROLES } = require("../constants/roles");
+const { USER_DEFAULTS } = require("../constants/userDefaults");
+const { PASSWORD_MIN_LENGTH } = require("../constants/password");
 
 const userSchema = new mongoose.Schema(
   {
@@ -8,15 +11,15 @@ const userSchema = new mongoose.Schema(
       unique: true,
       trim: true,
       lowercase: true,
-      minlength: 3, 
+      minlength: 3,
       maxlength: 30,
     },
 
-    password:{
+    password: {
       type: String,
       required: true,
-      minLength: 8,
-    },    
+      minLength: PASSWORD_MIN_LENGTH,
+    },
 
     fullName: {
       type: String,
@@ -34,18 +37,18 @@ const userSchema = new mongoose.Schema(
 
     country: {
       type: String,
-      default: "Unknown",
+      default: USER_DEFAULTS.COUNTRY,
       trim: true,
     },
 
     countryCode: {
       type: String,
-      default: "unknown",
+      default: USER_DEFAULTS.COUNTRY_CODE,
     },
 
     phoneNumber: {
       type: String,
-      default: "0000000000",
+      default: USER_DEFAULTS.PHONE_NUMBER,
       trim: true,
     },
 
@@ -57,9 +60,8 @@ const userSchema = new mongoose.Schema(
 
     role: {
       type: String,
-      enum: ["admin", "teacher", "student"],
+      enum: ALL_ROLES,
       required: true,
-      default: "admin"
     },
 
     // For teachers -> subjects taught
@@ -77,15 +79,15 @@ const userSchema = new mongoose.Schema(
     },
 
     refreshTokens: [
-  {
-    token: String,
-    device: String,
-    createdAt: {
-      type: Date,
-      default: Date.now,
-    },
-  },
-],
+      {
+        token: String,
+        device: String,
+        createdAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
   },
   {
     timestamps: true,

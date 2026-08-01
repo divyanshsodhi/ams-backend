@@ -1,17 +1,17 @@
 const mongoose = require("mongoose");
+const logger = require("../core/logger");
+const config = require("./index");
 
 const connectDB = async () => {
   try {
-    const uri = process.env.MONGODB_URI;
-
-    const connectionInstance = await mongoose.connect(uri, {
+    const connectionInstance = await mongoose.connect(config.MONGODB_URI, {
       tls: true,
-      tlsInsecure: true,
+      tlsInsecure: config.MONGODB_TLS_INSECURE === "true",
     });
 
-    console.log(`MongoDB Connected: ${connectionInstance.connection.host}`);
+    logger.info(`MongoDB Connected: ${connectionInstance.connection.host}`);
   } catch (error) {
-    console.error("MongoDB Connection Error:", error.message);
+    logger.error("MongoDB Connection Error", { message: error.message });
 
     process.exit(1);
   }

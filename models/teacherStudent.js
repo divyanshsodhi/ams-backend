@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { RELATIONSHIP_STATUS, DEFAULT_MONTHLY_CLASSES, ALL_RELATIONSHIP_STATUS } = require("../constants/relationshipStatus");
 
 const teacherStudentSchema = new mongoose.Schema(
   {
@@ -20,7 +21,7 @@ const teacherStudentSchema = new mongoose.Schema(
     ],
     monthlyClasses: {
       type: Number,
-      default: 8,
+      default: DEFAULT_MONTHLY_CLASSES,
       min: 1,
     },
     previousCompletedClasses: {
@@ -41,8 +42,8 @@ const teacherStudentSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["active", "inactive"],
-      default: "active",
+      enum: ALL_RELATIONSHIP_STATUS,
+      default: RELATIONSHIP_STATUS.ACTIVE,
     },
   },
   {

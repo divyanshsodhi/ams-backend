@@ -5,9 +5,10 @@ const { authenticate } = require("../middleware/auth");
 const { authorize } = require("../middleware/authorize");
 const { validate } = require("../middleware/validate");
 const { createTeacherSchema, updateTeacherSchema } = require("../validators/admin.validator");
+const { ROLES } = require("../constants/roles");
 const adminController = require("../controllers/admin.controller");
 
-router.use(authenticate, authorize("admin"));
+router.use(authenticate, authorize(ROLES.ADMIN));
 
 router.get("/teachers", adminController.getTeachers);
 router.post("/teachers", validate(createTeacherSchema), adminController.createTeacher);

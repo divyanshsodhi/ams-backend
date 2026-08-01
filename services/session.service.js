@@ -1,9 +1,15 @@
 const ClassSession = require("../models/classSession");
 const Schedule = require("../models/schedule");
 const TeacherStudent = require("../models/teacherStudent");
-const { NotFoundError, ValidationError, AuthorizationError } = require("../core/errors");
+const { NotFoundError } = require("../core/errors");
 const { getPaginationParams, getPaginationMeta } = require("../core/utils/pagination");
-const { SESSION_TYPES, SESSION_STATUS } = require("../constants/sessionTypes");
+const { assertOwnership } = require("../core/utils/ownership");
+const { USER_SAFE_PROJECTION } = require("../core/utils/projections");
+const { SESSION_TYPES } = require("../constants/sessionTypes");
+const { SESSION_STATUS } = require("../constants/sessionStatus");
+const { ROLES } = require("../constants/roles");
+
+const toDateKey = (date) => date.toISOString().slice(0, 10);
 
 const generateSessionsForSchedule = async (scheduleId) => {
   const schedule = await Schedule.findById(scheduleId);
@@ -12,35 +18,39 @@ const generateSessionsForSchedule = async (scheduleId) => {
   }
 
   const startDate = new Date(schedule.startDate);
-  const endDate = schedule.endDate ? new Date(schedule.endDate) : new Date(new Date().setMonth(new Date().getMonth() + 1));
+  const endDate = schedule.endDate
+    ? new Date(schedule.endDate)
+    : new Date(new Date().setMonth(new Date().getMonth() + 1));
+
+  const existingSessions = await ClassSession.find({
+    scheduleId,
+    classDate: { $gte: startDate, $lte: endDate },
+  }).select("classDate");
+
+  const existingDates = new Set(existingSessions.map((session) => toDateKey(session.classDate)));
+
   const sessions = [];
   const currentDate = new Date(startDate);
+  currentDate.setHours(0, 0, 0, 0);
 
   while (currentDate <= endDate) {
     const dayName = currentDate.toLocaleDateString("en-US", { weekday: "long" }).toLowerCase();
 
-    if (schedule.daysOfWeek.includes(dayName)) {
-      const existing = await ClassSession.findOne({
-        scheduleId,
-        classDate: {
-          $gte: new Date(currentDate.setHours(0, 0, 0, 0)),
-          $lt: new Date(currentDate.setHours(23, 59, 59, 999)),
-        },
+    if (
+      schedule.daysOfWeek.includes(dayName) &&
+      !existingDates.has(toDateKey(currentDate))
+    ) {
+      sessions.push({
+        scheduleId: schedule._id,
+        teacherId: schedule.teacherId,
+        studentId: schedule.studentId,
+        subjectId: schedule.subjectId,
+        classDate: new Date(currentDate),
+        startTime: schedule.startTime,
+        endTime: schedule.endTime,
+        sessionType: SESSION_TYPES.REGULAR,
+        status: SESSION_STATUS.SCHEDULED,
       });
-
-      if (!existing) {
-        sessions.push({
-          scheduleId: schedule._id,
-          teacherId: schedule.teacherId,
-          studentId: schedule.studentId,
-          subjectId: schedule.subjectId,
-          classDate: new Date(currentDate),
-          startTime: schedule.startTime,
-          endTime: schedule.endTime,
-          sessionType: SESSION_TYPES.REGULAR,
-          status: SESSION_STATUS.SCHEDULED,
-        });
-      }
     }
 
     currentDate.setDate(currentDate.getDate() + 1);
@@ -57,9 +67,18 @@ const getSessions = async (user, query) => {
   const { page, limit, skip } = getPaginationParams(query);
   const filter = {};
 
-  if (user.role === "teacher") filter.teacherId = user.userId;
-  if (user.role === "student") filter.studentId = user.userId;
-  if (query.status) filter.status = query.status;
+  if (user.role === ROLES.TEACHER) filter.teacherId = user.userId;
+  if (user.role === ROLES.STUDENT) filter.studentId = user.userId;
+  if (query.status) {
+    const statuses = query.status
+      .split(",")
+      .map((status) => status.trim())
+      .filter(Boolean);
+
+    if (statuses.length > 0) {
+      filter.status = { $in: statuses };
+    }
+  }
   if (query.sessionType) filter.sessionType = query.sessionType;
   if (query.scheduleId) filter.scheduleId = query.scheduleId;
   if (query.startDate) filter.classDate = { $gte: new Date(query.startDate) };
@@ -68,8 +87,8 @@ const getSessions = async (user, query) => {
   const [sessions, total] = await Promise.all([
     ClassSession.find(filter)
       .populate("scheduleId")
-      .populate("teacherId", "-password -refreshTokens")
-      .populate("studentId", "-password -refreshTokens")
+      .populate("teacherId", USER_SAFE_PROJECTION)
+      .populate("studentId", USER_SAFE_PROJECTION)
       .populate("subjectId")
       .skip(skip)
       .limit(limit)
@@ -86,9 +105,7 @@ const teacherConfirm = async (userId, sessionId) => {
     throw new NotFoundError("Session not found");
   }
 
-  if (session.teacherId.toString() !== userId) {
-    throw new AuthorizationError("Not authorized to confirm this session");
-  }
+  assertOwnership(session.teacherId, userId, "Not authorized to confirm this session");
 
   session.teacherConfirmed = true;
   session.status = SESSION_STATUS.PENDING_CONFIRMATION;
@@ -103,9 +120,7 @@ const studentConfirm = async (userId, sessionId) => {
     throw new NotFoundError("Session not found");
   }
 
-  if (session.studentId.toString() !== userId) {
-    throw new AuthorizationError("Not authorized to confirm this session");
-  }
+  assertOwnership(session.studentId, userId, "Not authorized to confirm this session");
 
   session.studentConfirmed = true;
   session.status = SESSION_STATUS.COMPLETED;
@@ -124,15 +139,13 @@ const studentConfirm = async (userId, sessionId) => {
   return session;
 };
 
-const rejectSession = async (userId, sessionId, data) => {
+const rejectSession = async (userId, sessionId) => {
   const session = await ClassSession.findById(sessionId);
   if (!session) {
     throw new NotFoundError("Session not found");
   }
 
-  if (session.studentId.toString() !== userId) {
-    throw new AuthorizationError("Not authorized to reject this session");
-  }
+  assertOwnership(session.studentId, userId, "Not authorized to reject this session");
 
   session.status = SESSION_STATUS.DISPUTED;
   await session.save();
@@ -162,9 +175,7 @@ const cancelSession = async (user, sessionId, data) => {
     throw new NotFoundError("Session not found");
   }
 
-  if (session.teacherId.toString() !== user.userId) {
-    throw new AuthorizationError("Not authorized to cancel this session");
-  }
+  assertOwnership(session.teacherId, user.userId, "Not authorized to cancel this session");
 
   session.status = SESSION_STATUS.CANCELLED;
   session.cancellationReason = data.reason;
@@ -179,9 +190,7 @@ const rescheduleSession = async (user, sessionId, data) => {
     throw new NotFoundError("Session not found");
   }
 
-  if (session.teacherId.toString() !== user.userId) {
-    throw new AuthorizationError("Not authorized to reschedule this session");
-  }
+  assertOwnership(session.teacherId, user.userId, "Not authorized to reschedule this session");
 
   session.status = SESSION_STATUS.RESCHEDULED;
   session.rescheduledTo = {

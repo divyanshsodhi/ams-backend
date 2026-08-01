@@ -1,5 +1,6 @@
 const { z } = require("zod");
 const { ALL_ROLES } = require("../constants/roles");
+const { PASSWORD_MIN_LENGTH, PASSWORD_MAX_LENGTH } = require("../constants/password");
 
 const registerSchema = z.object({
   username: z
@@ -11,8 +12,8 @@ const registerSchema = z.object({
   email: z.string().email("Invalid email format").transform((val) => val.toLowerCase()),
   password: z
     .string()
-    .min(8, "Password must be at least 8 characters")
-    .max(128, "Password is too long"),
+    .min(PASSWORD_MIN_LENGTH, `Password must be at least ${PASSWORD_MIN_LENGTH} characters`)
+    .max(PASSWORD_MAX_LENGTH, "Password is too long"),
   country: z.string().min(1, "Country is required").trim(),
   countryCode: z.string().min(1, "Country code is required"),
   phoneNumber: z.string().min(1, "Phone number is required").trim(),
@@ -38,8 +39,8 @@ const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, "Current password is required"),
   newPassword: z
     .string()
-    .min(8, "New password must be at least 8 characters")
-    .max(128, "New password is too long"),
+    .min(PASSWORD_MIN_LENGTH, `New password must be at least ${PASSWORD_MIN_LENGTH} characters`)
+    .max(PASSWORD_MAX_LENGTH, "New password is too long"),
 });
 
 module.exports = { registerSchema, loginSchema, refreshTokenSchema, logoutSchema, changePasswordSchema };

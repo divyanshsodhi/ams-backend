@@ -1,14 +1,5 @@
 const mongoose = require("mongoose");
-
-const notificationTypes = [
-  "upcoming_class",
-  "teacher_confirmed",
-  "student_confirmed",
-  "class_cancelled",
-  "class_rescheduled",
-  "extra_class_requested",
-  "session_disputed",
-];
+const { ALL_NOTIFICATION_TYPES } = require("../constants/notificationTypes");
 
 const notificationSchema = new mongoose.Schema(
   {
@@ -27,7 +18,7 @@ const notificationSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: notificationTypes,
+      enum: ALL_NOTIFICATION_TYPES,
       required: true,
     },
     isRead: {

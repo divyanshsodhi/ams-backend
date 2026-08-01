@@ -12,6 +12,11 @@ const getSchedules = asyncHandler(async (req, res) => {
   res.status(200).json(ApiResponse.success("Schedules fetched successfully", result));
 });
 
+const getSchedule = asyncHandler(async (req, res) => {
+  const schedule = await scheduleService.getScheduleById(req.user, req.params.id);
+  res.status(200).json(ApiResponse.success("Schedule fetched successfully", schedule));
+});
+
 const updateSchedule = asyncHandler(async (req, res) => {
   const schedule = await scheduleService.updateSchedule(req.user, req.params.id, req.body);
   res.status(200).json(ApiResponse.success("Schedule updated successfully", schedule));
@@ -27,4 +32,4 @@ const getUpcomingSchedules = asyncHandler(async (req, res) => {
   res.status(200).json(ApiResponse.success("Upcoming schedules fetched successfully", result));
 });
 
-module.exports = { createSchedule, getSchedules, updateSchedule, deleteSchedule, getUpcomingSchedules };
+module.exports = { createSchedule, getSchedules, getSchedule, updateSchedule, deleteSchedule, getUpcomingSchedules };

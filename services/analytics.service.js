@@ -1,42 +1,33 @@
 const ClassSession = require("../models/classSession");
 const TeacherStudent = require("../models/teacherStudent");
 const { SESSION_STATUS } = require("../constants/sessionStatus");
+const { startOfDay, endOfDay, startOfWeek, startOfMonth, endOfMonth } = require("../core/utils/dates");
 
 const getAdminAnalytics = async () => {
   const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfWeek = new Date(now);
-  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-  startOfWeek.setHours(0, 0, 0, 0);
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  now.setHours(23, 59, 59, 999);
+  const dayStart = startOfDay(now);
+  const weekStart = startOfWeek(now);
+  const monthStart = startOfMonth(now);
+  const dayEnd = endOfDay(now);
 
-  const todayClasses = await ClassSession.countDocuments({
-    classDate: { $gte: startOfDay, $lte: now },
-  });
-
-  const weeklyClasses = await ClassSession.countDocuments({
-    classDate: { $gte: startOfWeek, $lte: now },
-  });
-
-  const monthlyClasses = await ClassSession.countDocuments({
-    classDate: { $gte: startOfMonth, $lte: now },
-  });
-
-  const statusBreakdown = await ClassSession.aggregate([
-    { $match: { classDate: { $gte: startOfMonth, $lte: now } } },
-    { $group: { _id: "$status", count: { $sum: 1 } } },
+  const [todayClasses, weeklyClasses, monthlyClasses, statusBreakdown] = await Promise.all([
+    ClassSession.countDocuments({ classDate: { $gte: dayStart, $lte: dayEnd } }),
+    ClassSession.countDocuments({ classDate: { $gte: weekStart, $lte: dayEnd } }),
+    ClassSession.countDocuments({ classDate: { $gte: monthStart, $lte: dayEnd } }),
+    ClassSession.aggregate([
+      { $match: { classDate: { $gte: monthStart, $lte: dayEnd } } },
+      { $group: { _id: "$status", count: { $sum: 1 } } },
+    ]),
   ]);
 
-  const statusMap = {};
-  statusBreakdown.forEach(function(item) {
-    statusMap[item._id] = item.count;
-  });
+  const statusMap = Object.fromEntries(
+    statusBreakdown.map((item) => [item._id, item.count])
+  );
 
   return {
-    todayClasses: todayClasses,
-    weeklyClasses: weeklyClasses,
-    monthlyClasses: monthlyClasses,
+    todayClasses,
+    weeklyClasses,
+    monthlyClasses,
     completed: statusMap[SESSION_STATUS.COMPLETED] || 0,
     cancelled: statusMap[SESSION_STATUS.CANCELLED] || 0,
     rescheduled: statusMap[SESSION_STATUS.RESCHEDULED] || 0,
@@ -46,95 +37,99 @@ const getAdminAnalytics = async () => {
   };
 };
 
-const getTeacherAnalytics = async function(teacherId) {
+const getTeacherAnalytics = async (teacherId) => {
   const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-  now.setHours(23, 59, 59, 999);
+  const dayStart = startOfDay(now);
+  const dayEnd = endOfDay(now);
+  const monthStart = startOfMonth(now);
+  const monthEnd = endOfMonth(now);
 
-  const todayClasses = await ClassSession.countDocuments({
-    teacherId: teacherId,
-    classDate: { $gte: startOfDay, $lte: now },
-  });
+  const [todayClasses, monthlyTotal, pendingConfirmations, studentRelations] = await Promise.all([
+    ClassSession.countDocuments({
+      teacherId,
+      classDate: { $gte: dayStart, $lte: dayEnd },
+    }),
+    ClassSession.countDocuments({
+      teacherId,
+      classDate: { $gte: monthStart, $lte: monthEnd },
+    }),
+    ClassSession.countDocuments({
+      teacherId,
+      status: SESSION_STATUS.PENDING_CONFIRMATION,
+    }),
+    TeacherStudent.find({ teacherId }).select("monthlyClasses completedClassesCurrentCycle"),
+  ]);
 
-  const monthlyTotal = await ClassSession.countDocuments({
-    teacherId: teacherId,
-    classDate: { $gte: startOfMonth, $lte: endOfMonth },
-  });
+  const completedMonthly = studentRelations.reduce(
+    (sum, rel) => sum + (rel.completedClassesCurrentCycle || 0),
+    0
+  );
 
-  const pendingConfirmations = await ClassSession.countDocuments({
-    teacherId: teacherId,
-    status: SESSION_STATUS.PENDING_CONFIRMATION,
-  });
+  const totalMonthlyCapacity = studentRelations.reduce(
+    (sum, rel) => sum + (rel.monthlyClasses || 0),
+    0
+  );
 
-  const studentRelations = await TeacherStudent.find({ teacherId: teacherId })
-    .select("monthlyClasses completedClassesCurrentCycle");
-
-  var completedMonthly = 0;
-  var totalMonthlyCapacity = 0;
-
-  studentRelations.forEach(function(rel) {
-    completedMonthly = completedMonthly + (rel.completedClassesCurrentCycle || 0);
-    totalMonthlyCapacity = totalMonthlyCapacity + (rel.monthlyClasses || 0);
-  });
-
-  var completionPercentage = 0;
-  if (totalMonthlyCapacity > 0) {
-    completionPercentage = Math.round((completedMonthly / totalMonthlyCapacity) * 100);
-  }
+  const completionPercentage =
+    totalMonthlyCapacity > 0
+      ? Math.round((completedMonthly / totalMonthlyCapacity) * 100)
+      : 0;
 
   return {
-    todayClasses: todayClasses,
-    monthlyTotal: monthlyTotal,
-    completedMonthly: completedMonthly,
-    totalMonthlyCapacity: totalMonthlyCapacity,
-    completionPercentage: completionPercentage,
-    pendingConfirmations: pendingConfirmations,
+    todayClasses,
+    monthlyTotal,
+    completedMonthly,
+    totalMonthlyCapacity,
+    completionPercentage,
+    pendingConfirmations,
     studentCount: studentRelations.length,
   };
 };
 
-const getStudentAnalytics = async function(studentId) {
+const getStudentAnalytics = async (studentId) => {
   const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-  now.setHours(23, 59, 59, 999);
+  const dayStart = startOfDay(now);
+  const dayEnd = endOfDay(now);
+  const monthStart = startOfMonth(now);
+  const monthEnd = endOfMonth(now);
 
-  const upcomingClasses = await ClassSession.countDocuments({
-    studentId: studentId,
-    classDate: { $gte: now },
-    status: SESSION_STATUS.SCHEDULED,
-  });
+  const [upcomingClasses, completedClasses, pendingConfirmations, todayClasses, teacherStudent] =
+    await Promise.all([
+      ClassSession.countDocuments({
+        studentId,
+        classDate: { $gte: dayEnd },
+        status: SESSION_STATUS.SCHEDULED,
+      }),
+      ClassSession.countDocuments({
+        studentId,
+        status: SESSION_STATUS.COMPLETED,
+        classDate: { $gte: monthStart, $lte: monthEnd },
+      }),
+      ClassSession.countDocuments({
+        studentId,
+        status: SESSION_STATUS.PENDING_CONFIRMATION,
+      }),
+      ClassSession.countDocuments({
+        studentId,
+        classDate: { $gte: dayStart, $lte: dayEnd },
+      }),
+      TeacherStudent.findOne({ studentId }),
+    ]);
 
-  const completedClasses = await ClassSession.countDocuments({
-    studentId: studentId,
-    status: SESSION_STATUS.COMPLETED,
-    classDate: { $gte: startOfMonth, $lte: endOfMonth },
-  });
-
-  const pendingConfirmations = await ClassSession.countDocuments({
-    studentId: studentId,
-    status: SESSION_STATUS.PENDING_CONFIRMATION,
-  });
-
-  const todayClasses = await ClassSession.countDocuments({
-    studentId: studentId,
-    classDate: { $gte: startOfDay, $lte: now },
-  });
-
-  const teacherStudent = await TeacherStudent.findOne({ studentId: studentId });
+  const monthlyClasses = teacherStudent ? teacherStudent.monthlyClasses || 0 : 0;
+  const completedClassesCurrentCycle = teacherStudent
+    ? teacherStudent.completedClassesCurrentCycle || 0
+    : 0;
 
   return {
-    upcomingClasses: upcomingClasses,
-    completedClasses: completedClasses,
-    pendingConfirmations: pendingConfirmations,
-    todayClasses: todayClasses,
-    monthlyClasses: teacherStudent ? teacherStudent.monthlyClasses || 0 : 0,
-    completedClassesCurrentCycle: teacherStudent ? teacherStudent.completedClassesCurrentCycle || 0 : 0,
-    remainingClasses: teacherStudent ? (teacherStudent.monthlyClasses || 0) - (teacherStudent.completedClassesCurrentCycle || 0) : 0,
+    upcomingClasses,
+    completedClasses,
+    pendingConfirmations,
+    todayClasses,
+    monthlyClasses,
+    completedClassesCurrentCycle,
+    remainingClasses: monthlyClasses - completedClassesCurrentCycle,
   };
 };
 
-module.exports = { getAdminAnalytics: getAdminAnalytics, getTeacherAnalytics: getTeacherAnalytics, getStudentAnalytics: getStudentAnalytics };
+module.exports = { getAdminAnalytics, getTeacherAnalytics, getStudentAnalytics };

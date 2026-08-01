@@ -1,6 +1,7 @@
 const asyncHandler = require("../core/utils/asyncHandler");
 const ApiResponse = require("../core/utils/ApiResponse");
 const authService = require("../services/auth.service");
+const { USER_DEFAULTS } = require("../constants/userDefaults");
 
 const registerUser = asyncHandler(async (req, res) => {
   const user = await authService.registerUser(req.body);
@@ -8,7 +9,7 @@ const registerUser = asyncHandler(async (req, res) => {
 });
 
 const loginUser = asyncHandler(async (req, res) => {
-  const device = req.headers["user-agent"] || "unknown";
+  const device = req.headers["user-agent"] || USER_DEFAULTS.DEVICE;
   const result = await authService.loginUser(req.body.identifier, req.body.password, device);
   res.status(200).json(ApiResponse.success("Login successful", result));
 });

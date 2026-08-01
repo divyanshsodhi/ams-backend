@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const { ALL_RECURRENCE_TYPES, ALL_DAYS_OF_WEEK } = require("../constants/recurrenceTypes");
+const { MEETING_MODES, ALL_MEETING_MODES } = require("../constants/meetingModes");
 
 const scheduleSchema = new mongoose.Schema(
   {
@@ -44,8 +45,8 @@ const scheduleSchema = new mongoose.Schema(
     },
     meetingMode: {
       type: String,
-      enum: ["online", "offline"],
-      default: "online",
+      enum: ALL_MEETING_MODES,
+      default: MEETING_MODES.ONLINE,
     },
     meetingLink: {
       type: String,

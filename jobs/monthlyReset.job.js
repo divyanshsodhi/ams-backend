@@ -1,9 +1,10 @@
 const cron = require("node-cron");
 const TeacherStudent = require("../models/teacherStudent");
 const logger = require("../core/logger");
+const { JOB_SCHEDULES } = require("../config/jobs");
 
 const startMonthlyResetJob = () => {
-  cron.schedule("0 0 1 * *", async () => {
+  cron.schedule(JOB_SCHEDULES.MONTHLY_RESET, async () => {
     logger.info("Monthly reset job started");
 
     try {
